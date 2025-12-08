@@ -346,98 +346,227 @@ class _UltraModernGamePlayScreenState
       return _buildChallengeView();
     }
 
+    final modeColor = _getModeColor(gameState.mode);
+    final currentPlayerName = _selectedPlayerIndex != null
+        ? gameState.players[_selectedPlayerIndex!].name
+        : gameState.currentPlayer.name;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: Column(
-                children: [
-                  // Instruction text
-                  Container(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: ModernDesignSystem.space6,
-                      vertical: ModernDesignSystem.space4,
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _isSpinning
-                              ? 'Spinning...'
-                              : '${_selectedPlayerIndex != null ? gameState.players[_selectedPlayerIndex!].name : gameState.currentPlayer.name}, spin the bottle!',
-                          style: ModernDesignSystem.headlineMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: ModernDesignSystem.neutral900,
-                          ),
-                          textAlign: TextAlign.center,
-                        ).slideUpIn(),
-                        if (!_isSpinning)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              'The selected player will choose Truth or Dare',
-                              style: ModernDesignSystem.bodyMedium.copyWith(
-                                color: ModernDesignSystem.neutral600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ).animate().fadeIn(delay: 200.ms),
-                          ),
+        return Stack(
+          children: [
+            // Subtle radial glow from center
+            Positioned.fill(
+              child: Center(
+                child: Container(
+                  width: constraints.maxWidth,
+                  height: constraints.maxWidth,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        modeColor.withOpacity(0.08),
+                        modeColor.withOpacity(0.03),
+                        Colors.transparent,
                       ],
+                      stops: const [0.0, 0.5, 1.0],
                     ),
                   ),
+                ),
+              ),
+            ),
 
-                  // Bottle widget
-                  Expanded(
-                    child: SpinTheBottleWidgetV2(
-                      players: gameState.players,
-                      currentPlayerIndex:
-                          _selectedPlayerIndex ?? gameState.currentPlayerIndex,
-                      onSpinStart: () {
-                        print('Spin started - updating state');
-                        setState(() {
-                          _isSpinning = true;
-                          // We're in bottle mode, so use selected player if available
-                          if (_selectedPlayerIndex != null) {
-                            _spinnerName =
-                                gameState.players[_selectedPlayerIndex!].name;
-                          } else {
-                            _spinnerName = gameState.currentPlayer.name;
-                          }
-                          print('Spinner is: $_spinnerName');
-                        });
-                      },
-                      onPlayerSelected: (selectedIndex) {
-                        print('Player selected: $selectedIndex');
-                        print('Spinner was: $_spinnerName');
-                        print(
-                          'Selected player: ${gameState.players[selectedIndex].name}',
-                          );
-
-                          // Store the selected player index first
-                          setState(() {
-                            _isSpinning = false;
-                            _bottleHasSelected = true;
-                            _selectedPlayerIndex = selectedIndex;
-                          });
-
-                          // Update current player in game state
-                          ref
-                              .read(gameProvider.notifier)
-                              .setCurrentPlayer(selectedIndex);
-                        },
-                        modeColor: _getModeColor(gameState.mode),
+            // Main content
+            Column(
+              children: [
+                // Elegant header section
+                Container(
+                  padding: const EdgeInsets.fromLTRB(
+                    ModernDesignSystem.space6,
+                    ModernDesignSystem.space4,
+                    ModernDesignSystem.space6,
+                    ModernDesignSystem.space2,
+                  ),
+                  child: Column(
+                    children: [
+                      // Status indicator
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: _isSpinning
+                            ? _buildSpinningIndicator(modeColor)
+                            : _buildPlayerHeader(currentPlayerName, modeColor),
                       ),
+                    ],
+                  ),
+                ),
+
+                // Celestial spinner widget
+                Expanded(
+                  child: SpinTheBottleWidgetV2(
+                    players: gameState.players,
+                    currentPlayerIndex:
+                        _selectedPlayerIndex ?? gameState.currentPlayerIndex,
+                    onSpinStart: () {
+                      setState(() {
+                        _isSpinning = true;
+                        if (_selectedPlayerIndex != null) {
+                          _spinnerName =
+                              gameState.players[_selectedPlayerIndex!].name;
+                        } else {
+                          _spinnerName = gameState.currentPlayer.name;
+                        }
+                      });
+                    },
+                    onPlayerSelected: (selectedIndex) {
+                      setState(() {
+                        _isSpinning = false;
+                        _bottleHasSelected = true;
+                        _selectedPlayerIndex = selectedIndex;
+                      });
+
+                      ref
+                          .read(gameProvider.notifier)
+                          .setCurrentPlayer(selectedIndex);
+                    },
+                    modeColor: modeColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSpinningIndicator(Color modeColor) {
+    return Container(
+      key: const ValueKey('spinning'),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            modeColor.withOpacity(0.12),
+            modeColor.withOpacity(0.06),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: modeColor.withOpacity(0.15),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(modeColor),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Selecting player...',
+            style: ModernDesignSystem.titleSmall.copyWith(
+              color: modeColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 200.ms);
+  }
+
+  Widget _buildPlayerHeader(String playerName, Color modeColor) {
+    return Column(
+      key: const ValueKey('header'),
+      children: [
+        // Current player badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                modeColor.withOpacity(0.12),
+                modeColor.withOpacity(0.06),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color: modeColor.withOpacity(0.2),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: modeColor.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: modeColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: modeColor.withOpacity(0.5),
+                      blurRadius: 6,
+                      spreadRadius: 1,
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 10),
+              Text(
+                playerName,
+                style: ModernDesignSystem.titleMedium.copyWith(
+                  color: modeColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(duration: 300.ms).slideY(
+              begin: -0.3,
+              end: 0,
+              duration: 400.ms,
+              curve: Curves.easeOutCubic,
             ),
-          );
-        },
+
+        const SizedBox(height: 16),
+
+        // Title text
+        Text(
+          'Spin to Select',
+          style: ModernDesignSystem.headlineMedium.copyWith(
+            fontWeight: FontWeight.w800,
+            color: ModernDesignSystem.neutral900,
+            letterSpacing: -0.5,
+          ),
+        ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
+
+        const SizedBox(height: 6),
+
+        // Subtitle
+        Text(
+          'Selected player chooses Truth or Dare',
+          style: ModernDesignSystem.bodySmall.copyWith(
+            color: ModernDesignSystem.neutral500,
+          ),
+        ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+      ],
     );
   }
+
 
   Widget _buildNormalMode(GameState gameState, Player currentPlayer) {
     if (_showChallenge && _currentChallenge != null) {

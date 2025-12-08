@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../presentation/screens/home_screen.dart';
+import '../../presentation/screens/quirky_home_screen.dart';
 import '../theme/design_system.dart';
 
 /// Navigation utilities and route management
@@ -96,7 +96,7 @@ class AppNavigation {
     return Navigator.pushAndRemoveUntil(
       context,
       DesignSystem.fadeTransition(
-        page: const HomeScreen(),
+        page: const QuirkyHomeScreen(),
         duration: DesignSystem.durationSlow,
       ),
       (route) => false,
