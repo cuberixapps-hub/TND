@@ -4,13 +4,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/premium_constants.dart';
 import '../../core/theme/modern_design_system.dart';
 import '../../core/theme/app_icons.dart';
 import '../../core/animations/modern_animations.dart';
 import '../../core/navigation/app_navigation.dart';
 import '../../data/models/player_model.dart';
+import '../../services/revenue_cat_service.dart';
+import '../providers/game_session_provider.dart';
 import '../providers/players_provider.dart';
+import '../providers/premium_provider.dart';
 import '../providers/game_provider.dart';
+import '../utils/paywall_utils.dart';
 import '../widgets/banner_ad_widget.dart';
 import '../../services/ad_service.dart';
 import 'ultra_modern_game_play_screen.dart';
@@ -74,8 +79,15 @@ class _ModernPlayerSetupScreenState
     setState(() => _isAdding = true);
 
     final players = ref.read(playersProvider);
-    if (players.length >= AppConstants.maxPlayers) {
-      _showMessage('Maximum ${AppConstants.maxPlayers} players allowed');
+    final premiumState = ref.read(premiumProvider);
+    if (players.length >= premiumState.playerLimit) {
+      if (!premiumState.effectivePremium) {
+        _showMessage(
+          'Free users can add up to ${premiumState.playerLimit} players. Upgrade to Premium for up to ${PremiumConstants.premiumPlayerLimit}!',
+        );
+      } else {
+        _showMessage('Maximum ${AppConstants.maxPlayers} players allowed');
+      }
       setState(() => _isAdding = false);
       return;
     }
@@ -107,29 +119,84 @@ class _ModernPlayerSetupScreenState
       return;
     }
 
-    // Show rewarded ad dialog
-    final shouldWatch = await _showWatchAdDialog();
-    if (!shouldWatch) return;
-
-    // Show rewarded ad
-    final adService = AdService();
-    final rewarded = await adService.showRewardedAd(
-      context: context,
-      onUserEarnedReward: () {
-        // User watched the ad, proceed to game
-      },
-    );
-
-    if (!rewarded) {
-      _showMessage('Please watch the ad to start the game');
+    final premiumState = ref.read(premiumProvider);
+    if (premiumState.effectivePremium) {
+      _proceedToGame();
       return;
     }
 
+    final sessionState = ref.read(gameSessionProvider);
+    if (sessionState.isUnlimited) {
+      _proceedToGame();
+      return;
+    }
+    if (sessionState.remainingGames > 0) {
+      ref.read(gameSessionProvider.notifier).consumeGame();
+      _proceedToGame();
+      return;
+    }
+
+    if (premiumState.hasReachedAdGameLimit) {
+      final purchased = await showFullPaywall(
+        context,
+        ref,
+        offeringId: RevenueCatService.offeringSessionLimit,
+        gameMode: widget.mode,
+        headline: 'Unlimited Games\nNo Ads, No Limits',
+        subtitle: 'You\'ve used all free games today',
+        showSkipButton: false,
+        ignorePaywallSessionCap: true,
+      );
+      if (purchased && mounted) {
+        _proceedToGame();
+      }
+      return;
+    }
+
+    final purchased = await showFullPaywall(
+      context,
+      ref,
+      offeringId: RevenueCatService.offeringSessionLimit,
+      gameMode: widget.mode,
+      headline: 'Unlimited Games\nNo Ads, No Limits',
+      subtitle: 'Go unlimited or watch a short ad',
+      showSkipButton: true,
+      ignorePaywallSessionCap: true,
+    );
+
+    if (purchased) {
+      if (mounted) _proceedToGame();
+      return;
+    }
+
+    final shouldWatch = await _showWatchAdDialog();
+    if (!shouldWatch || !mounted) return;
+
+    final adService = AdService();
+    final rewarded = await adService.showRewardedAd(
+      context: context,
+      isPremium: premiumState.effectivePremium,
+      onUserEarnedReward: () {
+        ref.read(gameSessionProvider.notifier).addRewardedGames();
+        ref.read(premiumProvider.notifier).incrementAdGamesUsedToday();
+      },
+    );
+
     if (!mounted) return;
 
-    HapticFeedback.mediumImpact();
-    ref.read(gameProvider.notifier).startNewGame(widget.mode, players);
+    if (rewarded) {
+      _proceedToGame();
+    } else {
+      _showMessage('Ad not available. Try again later.');
+    }
+  }
 
+  void _proceedToGame() {
+    if (!mounted) return;
+    final players = ref.read(playersProvider);
+    HapticFeedback.mediumImpact();
+    ref.read(premiumProvider.notifier).resetGatedModeChallengeCount();
+    ref.read(gameProvider.notifier).startNewGame(widget.mode, players);
     AppNavigation.replaceWithSlide(
       context,
       const UltraModernGamePlayScreen(),

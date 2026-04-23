@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../core/constants/ad_constants.dart';
 import '../../core/theme/modern_design_system.dart';
+import '../providers/premium_provider.dart';
 
-class BannerAdWidget extends StatefulWidget {
+class BannerAdWidget extends ConsumerStatefulWidget {
   const BannerAdWidget({super.key});
 
   @override
-  State<BannerAdWidget> createState() => _BannerAdWidgetState();
+  ConsumerState<BannerAdWidget> createState() => _BannerAdWidgetState();
 }
 
-class _BannerAdWidgetState extends State<BannerAdWidget> {
+class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
   AdSize? _adSize;
@@ -71,6 +73,11 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final premium = ref.watch(premiumProvider);
+    if (premium.effectivePremium) {
+      return const SizedBox.shrink();
+    }
+
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     if (!_isLoaded || _bannerAd == null || _adSize == null) {
@@ -98,14 +105,15 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   }
 }
 
-class NativeBannerAdWidget extends StatefulWidget {
+class NativeBannerAdWidget extends ConsumerStatefulWidget {
   const NativeBannerAdWidget({super.key});
 
   @override
-  State<NativeBannerAdWidget> createState() => _NativeBannerAdWidgetState();
+  ConsumerState<NativeBannerAdWidget> createState() =>
+      _NativeBannerAdWidgetState();
 }
 
-class _NativeBannerAdWidgetState extends State<NativeBannerAdWidget> {
+class _NativeBannerAdWidgetState extends ConsumerState<NativeBannerAdWidget> {
   NativeAd? _nativeAd;
   bool _isLoaded = false;
 
@@ -163,6 +171,11 @@ class _NativeBannerAdWidgetState extends State<NativeBannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final premium = ref.watch(premiumProvider);
+    if (premium.effectivePremium) {
+      return const SizedBox.shrink();
+    }
+
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     if (!_isLoaded || _nativeAd == null) {

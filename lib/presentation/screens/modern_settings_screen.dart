@@ -1,12 +1,21 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
+import 'package:in_app_review/in_app_review.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/modern_design_system.dart';
 import '../../core/theme/app_icons.dart';
 import '../../core/navigation/app_navigation.dart';
+import '../../services/revenue_cat_service.dart';
+import '../providers/premium_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/paywall_utils.dart';
 
 class ModernSettingsScreen extends ConsumerStatefulWidget {
   const ModernSettingsScreen({super.key});
@@ -38,6 +47,7 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
+    final premiumState = ref.watch(premiumProvider);
 
     return Scaffold(
       backgroundColor: ModernDesignSystem.backgroundPrimary,
@@ -66,6 +76,55 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildPremiumCard(context, premiumState),
+                      const SizedBox(height: ModernDesignSystem.space6),
+                      ListTile(
+                        leading: Icon(
+                          Icons.refresh_rounded,
+                          color: ModernDesignSystem.primaryColor,
+                        ),
+                        title: Text(
+                          'Restore Purchases',
+                          style: ModernDesignSystem.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () async {
+                          HapticFeedback.lightImpact();
+                          final restored =
+                              await RevenueCatService().restorePurchases();
+                          await ref
+                              .read(premiumProvider.notifier)
+                              .refreshPremiumStatus();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                restored
+                                    ? 'Purchases restored!'
+                                    : 'No previous purchases found.',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      if (kDebugMode) ...[
+                        const SizedBox(height: ModernDesignSystem.space4),
+                        SwitchListTile(
+                          secondary: Icon(
+                            Icons.bug_report_outlined,
+                            color: ModernDesignSystem.neutral600,
+                          ),
+                          title: const Text('Debug: simulate Premium'),
+                          value: premiumState.debugSimulatePremium,
+                          onChanged: (v) {
+                            ref
+                                .read(premiumProvider.notifier)
+                                .setDebugSimulatePremium(v);
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: ModernDesignSystem.space8),
                       // Game Settings
                       _buildSectionTitle('Game Settings'),
                       const SizedBox(height: ModernDesignSystem.space4),
@@ -177,6 +236,89 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
         ],
       ),
     ).animate().fadeIn().slideY(begin: -0.1, end: 0);
+  }
+
+  Widget _buildPremiumCard(BuildContext context, PremiumState premiumState) {
+    final active = premiumState.effectivePremium;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: active
+              ? const [Color(0xFFFFD700), Color(0xFFFFA500)]
+              : [
+                  ModernDesignSystem.primaryColor,
+                  ModernDesignSystem.primaryDark,
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(ModernDesignSystem.radiusLg),
+        boxShadow: ModernDesignSystem.elevationMedium,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(ModernDesignSystem.radiusLg),
+        child: InkWell(
+          onTap: active
+              ? null
+              : () {
+                  HapticFeedback.lightImpact();
+                  showFullPaywall(
+                    context,
+                    ref,
+                    offeringId: RevenueCatService.offeringSettings,
+                    gameMode: null,
+                    headline: 'Go Premium',
+                    subtitle: 'Unlock everything',
+                    ignorePaywallSessionCap: true,
+                  );
+                },
+          borderRadius: BorderRadius.circular(ModernDesignSystem.radiusLg),
+          child: Padding(
+            padding: EdgeInsets.all(ModernDesignSystem.space5),
+            child: Row(
+              children: [
+                Icon(
+                  active ? Icons.diamond_outlined : Icons.lock_open_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
+                SizedBox(width: ModernDesignSystem.space4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        active ? 'Premium Active' : 'Go Premium',
+                        style: ModernDesignSystem.titleMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        active
+                            ? 'All features unlocked'
+                            : 'Unlimited games • No ads • All modes',
+                        style: ModernDesignSystem.bodySmall.copyWith(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!active)
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildSectionTitle(String title) {
@@ -507,13 +649,18 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
         .slideX(begin: 0.05, end: 0);
   }
 
+  // iOS App Store ID - Replace with your actual App Store ID
+  static const String _appStoreId = '6738056081';
+  // Android Package Name
+  static const String _androidPackageName = 'com.cuberix.truthordare';
+
   Widget _buildAboutSection() {
     return Column(
       children: [
         _buildInfoTile(
           icon: AppIcons.info,
           title: 'Version',
-          subtitle: '2.0.0',
+          subtitle: '1.0.2',
           onTap: () {},
         ),
         const SizedBox(height: ModernDesignSystem.space3),
@@ -521,23 +668,81 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
           icon: AppIcons.star,
           title: 'Rate Us',
           subtitle: 'Love the app? Let us know!',
-          onTap: () {
-            HapticFeedback.lightImpact();
-            // TODO: Implement rate functionality
-          },
+          onTap: () => _rateApp(),
         ),
         const SizedBox(height: ModernDesignSystem.space3),
         _buildInfoTile(
           icon: AppIcons.share,
           title: 'Share App',
           subtitle: 'Share with friends',
-          onTap: () {
-            HapticFeedback.lightImpact();
-            // TODO: Implement share functionality
-          },
+          onTap: () => _shareApp(),
         ),
       ],
     );
+  }
+
+  Future<void> _rateApp() async {
+    HapticFeedback.lightImpact();
+    
+    final InAppReview inAppReview = InAppReview.instance;
+    
+    try {
+      // Check if in-app review is available
+      if (await inAppReview.isAvailable()) {
+        await inAppReview.requestReview();
+      } else {
+        // Fallback to opening the store directly
+        await _openStore();
+      }
+    } catch (e) {
+      debugPrint('Error requesting review: $e');
+      // Fallback to opening the store directly
+      await _openStore();
+    }
+  }
+
+  Future<void> _openStore() async {
+    Uri storeUrl;
+    
+    if (Platform.isIOS) {
+      storeUrl = Uri.parse('https://apps.apple.com/app/id$_appStoreId');
+    } else {
+      storeUrl = Uri.parse('https://play.google.com/store/apps/details?id=$_androidPackageName');
+    }
+    
+    try {
+      if (await canLaunchUrl(storeUrl)) {
+        await launchUrl(storeUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Could not open store: $e');
+    }
+  }
+
+  Future<void> _shareApp() async {
+    HapticFeedback.lightImpact();
+    
+    String shareText;
+    String storeLink;
+    
+    if (Platform.isIOS) {
+      storeLink = 'https://apps.apple.com/app/id$_appStoreId';
+    } else {
+      storeLink = 'https://play.google.com/store/apps/details?id=$_androidPackageName';
+    }
+    
+    shareText = '🎉 Check out Truth or Dare: Ultimate Party! '
+        'The perfect game for parties and get-togethers.\n\n'
+        'Download now: $storeLink';
+    
+    try {
+      await Share.share(
+        shareText,
+        subject: 'Truth or Dare: Ultimate Party',
+      );
+    } catch (e) {
+      debugPrint('Error sharing: $e');
+    }
   }
 
   Widget _buildInfoTile({

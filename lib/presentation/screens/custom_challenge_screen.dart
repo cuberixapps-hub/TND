@@ -4,6 +4,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_constants.dart';
+import '../../data/models/challenge_model.dart';
+import '../../services/revenue_cat_service.dart';
+import '../providers/custom_challenges_provider.dart';
+import '../providers/premium_provider.dart';
+import '../utils/paywall_utils.dart';
 
 class CustomChallengeScreen extends ConsumerStatefulWidget {
   const CustomChallengeScreen({super.key});
@@ -77,21 +82,48 @@ class _CustomChallengeScreenState extends ConsumerState<CustomChallengeScreen>
   Future<void> _saveChallenge() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final premiumState = ref.read(premiumProvider);
+    if (!premiumState.effectivePremium) {
+      final purchased = await showPaywallBottomSheet(
+        context,
+        ref,
+        offeringId: RevenueCatService.offeringCustom,
+        gameMode: null,
+        headline: 'Save Your Custom\nChallenges',
+        ignorePaywallSessionCap: true,
+      );
+      if (purchased != true) {
+        if (mounted && purchased == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Upgrade in Settings to save custom challenges.'),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     setState(() {
       _isSaving = true;
     });
 
-    // Simulate save operation
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 400));
+
+    final challenge = Challenge(
+      content: _challengeController.text.trim(),
+      type: _selectedType,
+      mode: _selectedMode,
+      difficulty: _selectedDifficulty,
+      isCustom: true,
+    );
+    ref.read(customChallengesProvider.notifier).addChallenge(challenge);
 
     if (mounted) {
       _successController.forward();
       HapticFeedback.mediumImpact();
-
-      // Show success message
       _showSuccessMessage();
 
-      // Reset form after delay
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
           setState(() {

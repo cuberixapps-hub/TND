@@ -3,6 +3,7 @@ class AppConstants {
   static const String appVersion = '1.0.0';
 
   // Game Settings
+  /// Hard cap (premium). Free tier player limit is defined in `premium_constants.dart` / `premiumProvider`.
   static const int maxPlayers = 20;
   static const int minPlayers = 2;
 

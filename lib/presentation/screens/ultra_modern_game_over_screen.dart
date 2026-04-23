@@ -9,6 +9,7 @@ import '../../core/theme/modern_design_system.dart';
 import '../../data/models/player_model.dart';
 import '../../core/extensions/enum_extensions.dart';
 import '../providers/game_provider.dart';
+import '../utils/post_game_upsell.dart';
 import 'quirky_home_screen.dart';
 import 'modern_player_setup_screen.dart';
 
@@ -53,6 +54,9 @@ class _UltraModernGameOverScreenState
         _scaleController.forward();
         _confettiController.forward();
       }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      schedulePostGamePremiumUpsell(context: context, ref: ref);
     });
   }
 

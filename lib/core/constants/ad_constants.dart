@@ -1,8 +1,17 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
+import 'app_environment.dart';
+
 class AdConstants {
-  // Determine if we're in debug mode
+  /// Your live publisher ad units. **Only** `ENVIRONMENT=prod` — dev/uat never use these.
+  static bool get useProductionAdMobUnitIds =>
+      AppEnvironmentConfig.useProductionAdMobUnitIds;
+
+  /// Google sample units (dev, uat, unknown env fallback).
+  static bool get useTestAdMobIds => AppEnvironmentConfig.useTestAdMobIds;
+
+  /// Kept for older call sites: unrelated to AdMob ID selection (use [useTestAdMobIds] for ads).
   static bool get isDebugMode => kDebugMode;
 
   // Production Ad Unit IDs
@@ -34,16 +43,16 @@ class AdConstants {
       'ca-app-pub-3940256099942544/2247696110';
   static const String _testNativeIOS = 'ca-app-pub-3940256099942544/3986624511';
 
-  // App IDs
+  // App IDs (must match platform manifests where applicable; Dart value is for logging.)
   static String get appId {
     if (Platform.isAndroid) {
-      return isDebugMode
-          ? 'ca-app-pub-3940256099942544~3347511713' // Test App ID
-          : 'ca-app-pub-9565182775442262~1007351216'; // Production App ID
+      return useProductionAdMobUnitIds
+          ? 'ca-app-pub-9565182775442262~1007351216'
+          : 'ca-app-pub-3940256099942544~3347511713';
     } else if (Platform.isIOS) {
-      return isDebugMode
-          ? 'ca-app-pub-3940256099942544~1458002511' // Test App ID
-          : 'ca-app-pub-9565182775442262~7717882188'; // Production App ID
+      return useProductionAdMobUnitIds
+          ? 'ca-app-pub-9565182775442262~7717882188'
+          : 'ca-app-pub-3940256099942544~1458002511';
     }
     throw UnsupportedError('Unsupported platform');
   }
@@ -51,9 +60,11 @@ class AdConstants {
   // Banner Ad Unit ID
   static String get bannerAdUnitId {
     if (Platform.isAndroid) {
-      return isDebugMode ? _testBannerAndroid : _prodBannerAndroid;
+      return useProductionAdMobUnitIds
+          ? _prodBannerAndroid
+          : _testBannerAndroid;
     } else if (Platform.isIOS) {
-      return isDebugMode ? _testBannerIOS : _prodBannerIOS;
+      return useProductionAdMobUnitIds ? _prodBannerIOS : _testBannerIOS;
     }
     throw UnsupportedError('Unsupported platform');
   }
@@ -61,9 +72,13 @@ class AdConstants {
   // Interstitial Ad Unit ID
   static String get interstitialAdUnitId {
     if (Platform.isAndroid) {
-      return isDebugMode ? _testInterstitialAndroid : _prodInterstitialAndroid;
+      return useProductionAdMobUnitIds
+          ? _prodInterstitialAndroid
+          : _testInterstitialAndroid;
     } else if (Platform.isIOS) {
-      return isDebugMode ? _testInterstitialIOS : _prodInterstitialIOS;
+      return useProductionAdMobUnitIds
+          ? _prodInterstitialIOS
+          : _testInterstitialIOS;
     }
     throw UnsupportedError('Unsupported platform');
   }
@@ -71,23 +86,25 @@ class AdConstants {
   // Rewarded Ad Unit ID
   static String get rewardedAdUnitId {
     if (Platform.isAndroid) {
-      return isDebugMode ? _testRewardedAndroid : _prodRewardedAndroid;
+      return useProductionAdMobUnitIds
+          ? _prodRewardedAndroid
+          : _testRewardedAndroid;
     } else if (Platform.isIOS) {
-      return isDebugMode ? _testRewardedIOS : _prodRewardedIOS;
+      return useProductionAdMobUnitIds
+          ? _prodRewardedIOS
+          : _testRewardedIOS;
     }
     throw UnsupportedError('Unsupported platform');
   }
 
-  // Native Banner Ad Unit ID (only test IDs available for now)
+  /// Native template: sample units unless [useProductionAdMobUnitIds], then prod banners.
   static String get nativeBannerAdUnitId {
     if (Platform.isAndroid) {
-      return isDebugMode
-          ? _testNativeAndroid
-          : _testNativeAndroid; // Using test for production until real IDs provided
+      return useProductionAdMobUnitIds
+          ? _prodBannerAndroid
+          : _testNativeAndroid;
     } else if (Platform.isIOS) {
-      return isDebugMode
-          ? _testNativeIOS
-          : _testNativeIOS; // Using test for production until real IDs provided
+      return useProductionAdMobUnitIds ? _prodBannerIOS : _testNativeIOS;
     }
     throw UnsupportedError('Unsupported platform');
   }

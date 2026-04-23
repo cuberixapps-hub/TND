@@ -8,6 +8,9 @@ import '../../core/theme/modern_design_system.dart';
 import '../../core/theme/app_icons.dart';
 import '../../core/animations/modern_animations.dart';
 import '../../core/navigation/app_navigation.dart';
+import '../../services/revenue_cat_service.dart';
+import '../providers/premium_provider.dart';
+import '../utils/paywall_utils.dart';
 import '../widgets/banner_ad_widget.dart';
 import 'modern_player_setup_screen.dart';
 import 'modern_settings_screen.dart';
@@ -54,6 +57,29 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
     Future.delayed(ModernDesignSystem.durationNormal, () {
       if (mounted) {
         _modeController.forward();
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final show = ref
+          .read(premiumProvider.notifier)
+          .consumeMigrationWelcomeBanner();
+      if (show) {
+        ScaffoldMessenger.of(context).showMaterialBanner(
+          MaterialBanner(
+            content: const Text(
+              'Welcome back! Enjoy full access for 7 days — then unlock Premium for unlimited play.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
     });
   }
@@ -356,32 +382,6 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
   Widget _buildQuirkyGameModes(BuildContext context) {
     final modes = [
       _GameModeData(
-        mode: GameMode.kids,
-        title: 'Kids',
-        subtitle: 'Safe & silly fun',
-        icon: AppIcons.kids,
-        emoji: '🦄',
-        color: ModernDesignSystem.colorKids,
-        gradient: [
-          ModernDesignSystem.colorKids,
-          ModernDesignSystem.colorKids.withOpacity(0.6),
-        ],
-        rotation: -0.05,
-      ),
-      _GameModeData(
-        mode: GameMode.teens,
-        title: 'Teens',
-        subtitle: 'Wild adventures',
-        icon: AppIcons.teens,
-        emoji: '🚀',
-        color: ModernDesignSystem.colorTeens,
-        gradient: [
-          ModernDesignSystem.colorTeens,
-          ModernDesignSystem.colorTeens.withOpacity(0.6),
-        ],
-        rotation: 0.05,
-      ),
-      _GameModeData(
         mode: GameMode.adult,
         title: 'Adult',
         subtitle: 'Spicy & daring',
@@ -392,7 +392,7 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
           ModernDesignSystem.colorAdult,
           ModernDesignSystem.colorAdult.withOpacity(0.6),
         ],
-        rotation: -0.03,
+        rotation: -0.05,
       ),
       _GameModeData(
         mode: GameMode.couples,
@@ -404,6 +404,32 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
         gradient: [
           ModernDesignSystem.colorCouples,
           ModernDesignSystem.colorCouples.withOpacity(0.6),
+        ],
+        rotation: 0.05,
+      ),
+      _GameModeData(
+        mode: GameMode.kids,
+        title: 'Kids',
+        subtitle: 'Safe & silly fun',
+        icon: AppIcons.kids,
+        emoji: '🦄',
+        color: ModernDesignSystem.colorKids,
+        gradient: [
+          ModernDesignSystem.colorKids,
+          ModernDesignSystem.colorKids.withOpacity(0.6),
+        ],
+        rotation: -0.03,
+      ),
+      _GameModeData(
+        mode: GameMode.teens,
+        title: 'Teens',
+        subtitle: 'Wild adventures',
+        icon: AppIcons.teens,
+        emoji: '🚀',
+        color: ModernDesignSystem.colorTeens,
+        gradient: [
+          ModernDesignSystem.colorTeens,
+          ModernDesignSystem.colorTeens.withOpacity(0.6),
         ],
         rotation: 0.03,
       ),
@@ -451,6 +477,7 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
     _GameModeData data,
     int index,
   ) {
+    final premiumState = ref.watch(premiumProvider);
     return Padding(
           padding: const EdgeInsets.only(bottom: ModernDesignSystem.space4),
           child: Transform.rotate(
@@ -489,6 +516,40 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
                   ),
                   child: Stack(
                     children: [
+                      if (premiumState.isModeGated(data.mode))
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.lock,
+                                  color: Colors.amber,
+                                  size: 14,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'PRO',
+                                  style: TextStyle(
+                                    color: Colors.amber,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       // Floating emoji background
                       Positioned(
                         right: 20,
@@ -811,7 +872,24 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
   }
 
   void _navigateToMode(BuildContext context, _GameModeData data) {
-    // Show fun transition
+    final ps = ref.read(premiumProvider);
+    if (!ps.effectivePremium && !ps.paywallShownThisSession) {
+      showFullPaywall(
+        context,
+        ref,
+        offeringId: RevenueCatService.offeringOnboarding,
+        gameMode: data.mode,
+        headline: 'Unlock Unlimited\nTruth or Dare',
+        subtitle: 'All modes • No ads • Custom challenges',
+      ).then((_) {
+        if (context.mounted) _doNavigateToMode(context, data);
+      });
+      return;
+    }
+    _doNavigateToMode(context, data);
+  }
+
+  void _doNavigateToMode(BuildContext context, _GameModeData data) {
     showGeneralDialog(
       context: context,
       pageBuilder: (context, animation, secondaryAnimation) {
@@ -863,6 +941,7 @@ class _QuirkyHomeScreenState extends ConsumerState<QuirkyHomeScreen>
     );
 
     Future.delayed(ModernDesignSystem.durationSmooth, () {
+      if (!context.mounted) return;
       Navigator.of(context).push(
         PageRouteBuilder(
           pageBuilder:

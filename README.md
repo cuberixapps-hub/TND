@@ -1,3 +1,5 @@
+# TND
+
 # Truth or Dare - Flutter App
 
 A modern, feature-rich Truth or Dare party game app built with Flutter. Supports multiple game modes, up to 20 players, and includes hundreds of preloaded challenges with the ability to add custom ones.

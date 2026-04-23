@@ -1,11 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
+import 'core/constants/app_environment.dart';
 import 'core/navigation/app_navigation.dart';
 import 'services/ad_service.dart';
+import 'services/revenue_cat_service.dart';
 import 'presentation/screens/quirky_home_screen.dart';
 import 'presentation/screens/modern_player_setup_screen.dart';
 import 'presentation/screens/ultra_modern_game_play_screen.dart';
@@ -19,9 +23,6 @@ void main() async {
 
   // Initialize Hive
   await Hive.initFlutter();
-
-  // Initialize AdService (includes MobileAds initialization)
-  await AdService().initialize();
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
@@ -39,11 +40,68 @@ void main() async {
     ),
   );
 
+  // ATT before ads; RevenueCat before runApp so Riverpod never calls Purchases pre-configure.
+  await _requestTrackingPermission();
+  await RevenueCatService().initialize();
+
   runApp(const ProviderScope(child: TruthOrDareApp()));
 }
 
-class TruthOrDareApp extends StatelessWidget {
+/// Request App Tracking Transparency permission on iOS
+/// This must be called before initializing any ads or analytics
+Future<void> _requestTrackingPermission() async {
+  // Only request on iOS
+  if (!Platform.isIOS) return;
+  
+  try {
+    // Check current status first
+    final TrackingStatus status = await AppTrackingTransparency.trackingAuthorizationStatus;
+    debugPrint('🔒 ATT Current Status: $status');
+    
+    // If not determined, request permission
+    if (status == TrackingStatus.notDetermined) {
+      // Wait a bit to ensure the app is fully loaded
+      // This helps ensure the dialog appears correctly
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Request permission
+      final TrackingStatus newStatus = await AppTrackingTransparency.requestTrackingAuthorization();
+      debugPrint('🔒 ATT New Status: $newStatus');
+    }
+  } catch (e) {
+    debugPrint('🔒 ATT Error: $e');
+  }
+}
+
+class TruthOrDareApp extends StatefulWidget {
   const TruthOrDareApp({super.key});
+
+  @override
+  State<TruthOrDareApp> createState() => _TruthOrDareAppState();
+}
+
+class _TruthOrDareAppState extends State<TruthOrDareApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Request ATT and initialize ads after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeTrackingAndAds();
+    });
+  }
+
+  Future<void> _initializeTrackingAndAds() async {
+    debugPrint(
+      '🌍 Build environment: ${AppEnvironmentConfig.name} '
+      '(AdMob production units: ${AppEnvironmentConfig.useProductionAdMobUnitIds})',
+    );
+
+    // Initialize AdService (includes MobileAds initialization).
+    // ATT + RevenueCat already ran in main() before runApp.
+    await AdService().initialize();
+
+    debugPrint('✅ Ads initialized (ATT + RevenueCat done in main)');
+  }
 
   @override
   Widget build(BuildContext context) {

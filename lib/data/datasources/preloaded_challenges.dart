@@ -3515,7 +3515,7 @@ class PreloadedChallenges {
       difficulty: 3,
     ),
     Challenge(
-      content: "Take a body shot off someone",
+      content: "Give someone a spontaneous compliment",
       type: ChallengeType.dare,
       mode: GameMode.adult,
       difficulty: 3,
@@ -3593,7 +3593,7 @@ class PreloadedChallenges {
       difficulty: 4,
     ),
     Challenge(
-      content: "Play never have I ever and drink for each thing you've done",
+      content: "Play never have I ever - share 3 things you've never done",
       type: ChallengeType.dare,
       mode: GameMode.adult,
       difficulty: 3,
@@ -3695,7 +3695,7 @@ class PreloadedChallenges {
       difficulty: 3,
     ),
     Challenge(
-      content: "Let someone give you a cold drink trail on your body",
+      content: "Let someone trace a secret message on your back with their finger",
       type: ChallengeType.dare,
       mode: GameMode.adult,
       difficulty: 3,

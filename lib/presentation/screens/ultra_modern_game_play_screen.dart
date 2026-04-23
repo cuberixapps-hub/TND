@@ -6,6 +6,8 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import '../../core/constants/app_constants.dart';
+import '../../services/ad_service.dart';
+import '../../services/revenue_cat_service.dart';
 import '../../core/theme/modern_design_system.dart';
 import '../../core/theme/app_icons.dart';
 import '../../core/navigation/app_navigation.dart';
@@ -15,7 +17,9 @@ import '../../data/models/player_model.dart';
 import '../../data/models/challenge_model.dart';
 import '../../data/models/game_state_model.dart';
 import '../providers/game_provider.dart';
+import '../providers/premium_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/paywall_utils.dart';
 import '../widgets/spin_the_bottle_widget_v2.dart';
 import '../widgets/banner_ad_widget.dart';
 import 'modern_scoreboard_screen.dart';
@@ -64,16 +68,24 @@ class _UltraModernGamePlayScreenState
     super.dispose();
   }
 
-  void _handleTruthOrDare(String choice) {
+  Future<void> _handleTruthOrDare(String choice) async {
     setState(() {
       _selectedChoice = choice;
     });
 
     HapticFeedback.mediumImpact();
 
-    // Get challenge
     final gameState = ref.read(gameProvider);
     if (gameState == null) return;
+
+    final mode = gameState.mode;
+    final psGate = ref.read(premiumProvider);
+    if (psGate.isModeGated(mode) &&
+        psGate.hasReachedFreeChallengeLimitInGatedMode &&
+        !psGate.effectivePremium) {
+      final ok = await _resolveGatedModeLimit(mode);
+      if (!ok || !mounted) return;
+    }
 
     final challenge = ref
         .read(gameProvider.notifier)
@@ -81,12 +93,81 @@ class _UltraModernGamePlayScreenState
           choice == 'Truth' ? ChallengeType.truth : ChallengeType.dare,
         );
 
+    if (!mounted) return;
+
+    final psAfter = ref.read(premiumProvider);
+    if (psAfter.isModeGated(mode) && !psAfter.effectivePremium) {
+      ref.read(premiumProvider.notifier).incrementFreeModeChallengesUsed();
+    }
+
     setState(() {
       _currentChallenge = challenge;
       _showChallenge = true;
     });
 
     _cardController.forward();
+  }
+
+  Future<bool> _resolveGatedModeLimit(GameMode mode) async {
+    Future<bool> runWatchAd() async {
+      final premium = ref.read(premiumProvider).effectivePremium;
+      return AdService().showRewardedAd(
+        context: context,
+        isPremium: premium,
+        onUserEarnedReward: () {
+          ref.read(premiumProvider.notifier).incrementGatedExtraFromAd();
+        },
+      );
+    }
+
+    final sheet = await showPaywallBottomSheet(
+      context,
+      ref,
+      offeringId: RevenueCatService.offeringModeGate,
+      gameMode: mode,
+      headline: 'You\'ve seen a taste —\nunlock 460+ spicy challenges',
+      showWatchAdOption: true,
+      onWatchAd: runWatchAd,
+      ignorePaywallSessionCap: false,
+    );
+
+    if (sheet == true) return true;
+
+    if (sheet == null) {
+      final adOk = await runWatchAd();
+      if (adOk) return true;
+      if (mounted) AppNavigation.navigateToHome(context);
+      return false;
+    }
+
+    if (!mounted) return false;
+    final wantAd = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keep playing?'),
+        content: const Text(
+          'Watch an ad for more challenges in this mode, or head home.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Home'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Watch ad'),
+          ),
+        ],
+      ),
+    );
+
+    if (wantAd == true) {
+      final adOk = await runWatchAd();
+      if (adOk) return true;
+    }
+
+    if (mounted) AppNavigation.navigateToHome(context);
+    return false;
   }
 
   void _completeChallenge(bool completed) {

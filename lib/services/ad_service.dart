@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../core/constants/ad_constants.dart';
+import '../core/constants/app_environment.dart';
 
 class AdService {
   static final AdService _instance = AdService._internal();
@@ -33,12 +34,12 @@ class AdService {
   Future<void> initialize() async {
     await MobileAds.instance.initialize();
 
-    // Log which ad mode is being used
     debugPrint(
-      '🎯 AdMob Mode: ${AdConstants.isDebugMode ? "TEST/DEBUG" : "PRODUCTION"}',
+      '🌍 ENVIRONMENT=${AppEnvironmentConfig.name} '
+      'AdMob=${AdConstants.useProductionAdMobUnitIds ? "PRODUCTION_UNITS" : "TEST_UNITS_ONLY"}',
     );
     debugPrint('📱 Platform: ${Platform.isAndroid ? "Android" : "iOS"}');
-    debugPrint('🆔 App ID: ${AdConstants.appId}');
+    debugPrint('🆔 App ID (Dart): ${AdConstants.appId}');
 
     // Preload ads
     loadInterstitialAd();
@@ -82,7 +83,13 @@ class AdService {
   Future<void> showInterstitialAd({
     required BuildContext context,
     VoidCallback? onAdDismissed,
+    bool isPremium = false,
+    bool suppressForFirstSession = false,
   }) async {
+    if (isPremium || suppressForFirstSession) {
+      onAdDismissed?.call();
+      return;
+    }
     if (!_isInterstitialAdLoaded) {
       // Show loading dialog
       showDialog(
@@ -180,7 +187,12 @@ class AdService {
   Future<bool> showRewardedAd({
     required BuildContext context,
     VoidCallback? onUserEarnedReward,
+    bool isPremium = false,
   }) async {
+    if (isPremium) {
+      onUserEarnedReward?.call();
+      return true;
+    }
     if (!_isRewardedAdLoaded) {
       // Show loading dialog
       showDialog(
