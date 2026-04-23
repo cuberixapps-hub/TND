@@ -14,7 +14,10 @@ class AppIcons {
   // Game Mode Icons
   static const IconData kids = Icons.child_friendly_rounded;
   static const IconData teens = Icons.school_rounded;
-  static const IconData adult = Icons.nightlife_rounded;
+  // Neutral "adult" icon. We deliberately avoid nightlife/alcohol imagery
+  // (e.g. Icons.nightlife_rounded / wine_bar) to stay clear of App Review
+  // 4.3(b) "drinking game" framing.
+  static const IconData adult = Icons.local_fire_department_rounded;
   static const IconData couples = Icons.favorite_rounded;
 
   // Action Icons
@@ -26,7 +29,10 @@ class AppIcons {
   static const IconData previous = Icons.skip_previous_rounded;
 
   // Game Icons
-  static const IconData bottle = Icons.wine_bar_rounded;
+  // Previously `Icons.wine_bar_rounded` — replaced with a neutral spinner
+  // arrow so the app’s random picker no longer visually implies a drinking
+  // game. Identifier kept as `bottle` for backward code compatibility.
+  static const IconData bottle = Icons.refresh_rounded;
   static const IconData spin = Icons.rotate_right_rounded;
   static const IconData truth = Icons.psychology_rounded;
   static const IconData dare = Icons.flash_on_rounded;

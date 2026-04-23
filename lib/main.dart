@@ -40,33 +40,36 @@ void main() async {
     ),
   );
 
-  // ATT before ads; RevenueCat before runApp so Riverpod never calls Purchases pre-configure.
-  await _requestTrackingPermission();
+  // RevenueCat before runApp so Riverpod never calls Purchases pre-configure.
+  // NOTE: ATT must be requested AFTER the app is presented and in the active state,
+  // otherwise iOS/iPadOS (especially iPadOS 26.1) will silently drop the dialog.
+  // We therefore defer ATT until the first frame is on screen (see _TruthOrDareAppState).
   await RevenueCatService().initialize();
 
   runApp(const ProviderScope(child: TruthOrDareApp()));
 }
 
-/// Request App Tracking Transparency permission on iOS
-/// This must be called before initializing any ads or analytics
+/// Request App Tracking Transparency permission on iOS.
+/// Must be invoked only once the app is presented and in the active state.
 Future<void> _requestTrackingPermission() async {
-  // Only request on iOS
+  // Only request on iOS / iPadOS
   if (!Platform.isIOS) return;
-  
+
   try {
     // Check current status first
-    final TrackingStatus status = await AppTrackingTransparency.trackingAuthorizationStatus;
+    TrackingStatus status =
+        await AppTrackingTransparency.trackingAuthorizationStatus;
     debugPrint('🔒 ATT Current Status: $status');
-    
-    // If not determined, request permission
+
+    // If not determined, request permission.
     if (status == TrackingStatus.notDetermined) {
-      // Wait a bit to ensure the app is fully loaded
-      // This helps ensure the dialog appears correctly
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Request permission
-      final TrackingStatus newStatus = await AppTrackingTransparency.requestTrackingAuthorization();
-      debugPrint('🔒 ATT New Status: $newStatus');
+      // Small delay so the system dialog is presented after the first frame
+      // is committed and the app is fully in the foreground/active state.
+      await Future.delayed(const Duration(milliseconds: 400));
+
+      status = await AppTrackingTransparency
+          .requestTrackingAuthorization();
+      debugPrint('🔒 ATT New Status: $status');
     }
   } catch (e) {
     debugPrint('🔒 ATT Error: $e');
@@ -96,11 +99,16 @@ class _TruthOrDareAppState extends State<TruthOrDareApp> {
       '(AdMob production units: ${AppEnvironmentConfig.useProductionAdMobUnitIds})',
     );
 
-    // Initialize AdService (includes MobileAds initialization).
-    // ATT + RevenueCat already ran in main() before runApp.
+    // Request ATT AFTER the app is visible and in the active state.
+    // This fixes the iPadOS 26.1 issue where the system dialog never appears
+    // because it was requested pre-runApp.
+    await _requestTrackingPermission();
+
+    // Initialize AdService (includes MobileAds initialization) only after ATT
+    // has resolved so AdMob picks up the correct tracking authorization.
     await AdService().initialize();
 
-    debugPrint('✅ Ads initialized (ATT + RevenueCat done in main)');
+    debugPrint('✅ ATT + Ads initialized (RevenueCat done in main)');
   }
 
   @override
