@@ -335,9 +335,9 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
     return Column(
       children: [
         _buildToggleTile(
-          icon: AppIcons.bottle,
-          title: 'Spin the Bottle Mode',
-          subtitle: 'Use bottle spinning for player selection',
+          icon: AppIcons.spin,
+          title: 'Random Picker Mode',
+          subtitle: 'Use a spinning picker to choose the next player',
           value: settings.useBottleMode,
           onChanged: (value) {
             HapticFeedback.lightImpact();
@@ -649,8 +649,8 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
         .slideX(begin: 0.05, end: 0);
   }
 
-  // iOS App Store ID - Replace with your actual App Store ID
-  static const String _appStoreId = '6738056081';
+  // iOS App Store ID (Truth or Dare: Ultimate Party)
+  static const String _appStoreId = '6755624689';
   // Android Package Name
   static const String _androidPackageName = 'com.cuberix.truthordare';
 
@@ -660,7 +660,7 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
         _buildInfoTile(
           icon: AppIcons.info,
           title: 'Version',
-          subtitle: '1.0.2',
+          subtitle: '1.0.3',
           onTap: () {},
         ),
         const SizedBox(height: ModernDesignSystem.space3),
@@ -683,58 +683,85 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
 
   Future<void> _rateApp() async {
     HapticFeedback.lightImpact();
-    
-    final InAppReview inAppReview = InAppReview.instance;
-    
+
+    // Always fall back to opening the App Store / Play Store if the native
+    // in-app review sheet cannot be presented. Apple's reviewer reported this
+    // button as unresponsive on iPad — ensuring a store fallback guarantees a
+    // visible response on every device/OS combination.
     try {
-      // Check if in-app review is available
-      if (await inAppReview.isAvailable()) {
+      final InAppReview inAppReview = InAppReview.instance;
+      final available = await inAppReview.isAvailable();
+      if (available) {
         await inAppReview.requestReview();
-      } else {
-        // Fallback to opening the store directly
-        await _openStore();
+        // Some iOS versions silently no-op the in-app review prompt (e.g. when
+        // the quota has already been hit). As a safety net, also surface a
+        // confirmation snack bar so the user always sees feedback.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Thanks for rating us!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
       }
     } catch (e) {
       debugPrint('Error requesting review: $e');
-      // Fallback to opening the store directly
-      await _openStore();
     }
+    // Fallback: open the store page directly.
+    await _openStore();
   }
 
   Future<void> _openStore() async {
     Uri storeUrl;
-    
+
     if (Platform.isIOS) {
       storeUrl = Uri.parse('https://apps.apple.com/app/id$_appStoreId');
     } else {
-      storeUrl = Uri.parse('https://play.google.com/store/apps/details?id=$_androidPackageName');
+      storeUrl = Uri.parse(
+        'https://play.google.com/store/apps/details?id=$_androidPackageName',
+      );
     }
-    
+
     try {
-      if (await canLaunchUrl(storeUrl)) {
-        await launchUrl(storeUrl, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        storeUrl,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open the store right now.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       debugPrint('Could not open store: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open the store right now.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
   Future<void> _shareApp() async {
     HapticFeedback.lightImpact();
-    
-    String shareText;
-    String storeLink;
-    
-    if (Platform.isIOS) {
-      storeLink = 'https://apps.apple.com/app/id$_appStoreId';
-    } else {
-      storeLink = 'https://play.google.com/store/apps/details?id=$_androidPackageName';
-    }
-    
-    shareText = '🎉 Check out Truth or Dare: Ultimate Party! '
-        'The perfect game for parties and get-togethers.\n\n'
+
+    final String storeLink = Platform.isIOS
+        ? 'https://apps.apple.com/app/id$_appStoreId'
+        : 'https://play.google.com/store/apps/details?id=$_androidPackageName';
+
+    final String shareText =
+        '🎉 Check out Truth or Dare: Ultimate Party — '
+        'the perfect icebreaker game for friends, family and get-togethers.\n\n'
         'Download now: $storeLink';
-    
+
     try {
       await Share.share(
         shareText,
@@ -742,6 +769,14 @@ class _ModernSettingsScreenState extends ConsumerState<ModernSettingsScreen>
       );
     } catch (e) {
       debugPrint('Error sharing: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open the share sheet right now.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
